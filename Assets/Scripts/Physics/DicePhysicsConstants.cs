@@ -7,31 +7,31 @@ namespace DiceGame.Physics
     /// </summary>
     public static class DicePhysicsConstants
     {
-        [Header("Dice Physics")]
+        // Dice Physics
         public const float DICE_MASS = 1f;
         public const float DICE_DRAG = 0.5f;
         public const float DICE_ANGULAR_DRAG = 5f;
         
-        [Header("Wall Physics")]
+        // Wall Physics
         public const float WALL_BOUNCINESS = 0.3f;
         public const float WALL_FRICTION = 0.4f;
         
-        [Header("Floor Physics")]
+        // Floor Physics
         public const float FLOOR_BOUNCINESS = 0.2f;
         public const float FLOOR_FRICTION = 0.6f;
         
-        [Header("Settling Detection")]
+        // Settling Detection
         public const float SETTLING_VELOCITY_THRESHOLD = 0.1f;
         public const float SETTLING_ANGULAR_VELOCITY_THRESHOLD = 0.1f;
         public const float SETTLING_TIME_REQUIREMENT = 1f;
         
-        [Header("Roll Force")]
+        // Roll Force
         public const float MIN_ROLL_FORCE = 5f;
         public const float MAX_ROLL_FORCE = 15f;
         public const float MIN_TORQUE = 50f;
         public const float MAX_TORQUE = 150f;
         
-        [Header("Edge Case Detection")]
+        // Edge Case Detection
         public const float EDGE_DETECTION_ANGLE = 45f;
         public const float UNSTUCK_FORCE = 5f;
         public const float STACK_DETECTION_DISTANCE = 0.1f;
