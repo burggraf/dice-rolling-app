@@ -103,11 +103,11 @@ public class SimpleDiceGame : MonoBehaviour
         rb2.velocity = Vector3.zero;
         rb2.angularVelocity = Vector3.zero;
         
-        // Apply gentler random forces - keep dice in the room
-        rb1.AddForce(Random.Range(-3f, 3f), Random.Range(2f, 5f), Random.Range(-3f, 3f), ForceMode.Impulse);
+        // Apply gentler random forces - keep dice in the room, higher jump
+        rb1.AddForce(Random.Range(-3f, 3f), Random.Range(4f, 8f), Random.Range(-3f, 3f), ForceMode.Impulse);
         rb1.AddTorque(Random.Range(-50f, 50f), Random.Range(-50f, 50f), Random.Range(-50f, 50f));
         
-        rb2.AddForce(Random.Range(-3f, 3f), Random.Range(2f, 5f), Random.Range(-3f, 3f), ForceMode.Impulse);
+        rb2.AddForce(Random.Range(-3f, 3f), Random.Range(4f, 8f), Random.Range(-3f, 3f), ForceMode.Impulse);
         rb2.AddTorque(Random.Range(-50f, 50f), Random.Range(-50f, 50f), Random.Range(-50f, 50f));
     }
 }
