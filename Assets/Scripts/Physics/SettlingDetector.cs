@@ -210,7 +210,7 @@ namespace DiceGame.Physics
             
             foreach (Vector3 direction in rayDirections)
             {
-                if (Physics.Raycast(center, direction.normalized, rayDistance, ~(1 << gameObject.layer)))
+                if (UnityEngine.Physics.Raycast(center, direction.normalized, rayDistance, ~(1 << gameObject.layer)))
                 {
                     hitCount++;
                 }
@@ -227,7 +227,7 @@ namespace DiceGame.Physics
         private void CheckIfStacked()
         {
             // Check if another dice is too close (stacking detection)
-            Collider[] nearbyColliders = Physics.OverlapSphere(
+            Collider[] nearbyColliders = UnityEngine.Physics.OverlapSphere(
                 transform.position, 
                 DicePhysicsConstants.STACK_DETECTION_DISTANCE, 
                 ~(1 << gameObject.layer)

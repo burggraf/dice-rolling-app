@@ -122,7 +122,7 @@ namespace DiceGame.Utils
             currentFPS = 1.0f / Time.unscaledDeltaTime;
             
             // Get memory usage
-            currentMemoryMB = System.GC.GetTotalMemory(false) / (1024 * 1024);
+            currentMemoryMB = (long)(System.GC.GetTotalMemory(false) / (1024 * 1024));
             
             // Update history
             UpdateFPSHistory(currentFPS);
