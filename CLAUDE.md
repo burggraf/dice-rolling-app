@@ -4,132 +4,159 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an iPhone dice rolling game built with Unity 2022.3.50 LTS. The app features physics-based dice that bounce realistically off 4 walls within a contained room environment, with touch controls for rolling and results displayed on the floor.
+This is an iPhone dice rolling game built with Unity 2022.3.50 LTS featuring physics-based dice simulation with realistic bouncing within a contained room environment. The app uses touch controls for rolling dice and displays results both on-screen and on the floor.
 
 ## Development Commands
 
 ### Unity Project Setup
-- **Create Project**: Use Unity 2022.3.50 LTS with iOS Build Support module
-- **iOS Build**: File → Build Settings → iOS → Build
+- **Open Project**: Open "Dice Rolling App" folder in Unity 2022.3.50 LTS
+- **iOS Build**: File → Build Settings → iOS → Build (requires iOS Build Support module)
 - **Test Build**: File → Build Settings → iOS → Build and Run (requires connected iOS device)
 
-### Performance Testing
-- **Unity Profiler**: Window → Analysis → Profiler (monitor FPS, memory, physics)
-- **iOS Performance**: Xcode Instruments for device-specific profiling
-- **Memory Testing**: Unity Memory Profiler package for detailed analysis
-
-### Physics Testing
+### Key Unity Tools
+- **Profiler**: Window → Analysis → Profiler (monitor FPS, memory, physics)
 - **Physics Debugger**: Window → Analysis → Physics Debugger
-- **Collision Visualization**: Enable Physics.debugDraw in Physics settings
+- **Console**: Window → General → Console (for debugging dice settling and validation)
+
+### Testing Commands
+- **Play Mode**: Enter Play Mode to test dice physics
+- **Test Shortcuts** (when ScoreSystemTestHelper is present):
+  - `V` key: Simulate valid roll
+  - `I` key: Simulate invalid roll  
+  - `Space` key: Trigger normal dice roll
 
 ## Architecture Overview
 
-### Core Systems
-The app follows a Manager-based architecture with event-driven communication:
+### Core Manager System
+The project follows a Manager-based architecture with event-driven communication:
 
-- **GameManager**: Singleton managing overall game state and dice roll coordination
-- **DiceController**: Handles individual dice physics, settling detection, and result calculation
-- **PhysicsManager**: Manages physics materials, performance monitoring, and edge case handling
-- **TouchInputHandler**: Unity Input System integration for mobile touch controls
-- **UIManager**: World Space Canvas for result display and touch feedback
+- **GameManager**: Singleton managing game state, dice coordination, and result validation
+- **DiceController**: Individual dice physics, settling detection, and value calculation
+- **UIManager**: UI system coordination and canvas management
+- **ScoreManager**: Screen-space score display with validation feedback
+
+### Key Namespaces
+```csharp
+DiceGame.Managers     // Core game management classes
+DiceGame.Physics      // Physics constants and configurations
+DiceGame.UI           // UI components and managers
+```
 
 ### Physics Implementation
-- **Dice Physics**: Rigidbody + Box Collider with custom Physics Materials
-- **Room Boundaries**: Static Box Colliders for 4 walls and floor
+- **Dice Physics**: Rigidbody + Collider with physics materials from `DicePhysicsConstants`
 - **Settling Detection**: Multi-criteria validation (velocity, angular velocity, time)
-- **Edge Cases**: Automatic detection and resolution for dice on edges or stacking
+- **Validation System**: Wall collision detection and boundary checking
+- **Edge Cases**: Automatic detection for dice touching walls or outside bounds
 
-### Key Constants
+### Event System
+Uses UnityEvents for decoupled communication:
+- `OnRollStart` / `OnRollComplete` - Dice rolling lifecycle
+- `OnDiceSettled` - Individual dice settling
+- `OnResultCalculated(int)` - Final result (use -1 for invalid rolls)
+
+## Key Physics Constants
+
+Located in `Assets/Scripts/Physics/DicePhysicsConstants.cs`:
 ```csharp
-// Physics Configuration (DicePhysicsConstants class)
 DICE_MASS = 1f
 SETTLING_VELOCITY_THRESHOLD = 0.1f
 SETTLING_TIME_REQUIREMENT = 1f
+MIN_ROLL_FORCE = 5f / MAX_ROLL_FORCE = 15f
+MIN_TORQUE = 50f / MAX_TORQUE = 150f
 ```
 
-## Development Phases
+## Score System Architecture
 
-### Phase 1: Core Physics (Weeks 1-2)
-- Unity project setup with iOS build support
-- Basic room environment with collision boundaries
-- Initial dice physics with Rigidbody and custom Physics Materials
-- Basic settling detection system
+### Core Components
+1. **ScoreManager**: Top-right screen display, handles valid/invalid roll messaging
+2. **GameManager Validation**: Checks wall contact and boundary violations
+3. **ResultDisplayUI**: World-space floor display for results
 
-### Phase 2: Architecture (Weeks 3-4)
-- Manager class structure implementation
-- Event system for dice state communication
-- Custom 3D dice models integration
-- ScriptableObject-based physics configuration system
+### Validation Logic
+- Dice touching walls (tagged "Wall") → Invalid roll
+- Dice outside board boundaries → Invalid roll  
+- Valid rolls show total score, invalid rolls show "Roll Again"
 
-### Phase 3: Mobile Integration (Weeks 5-6)
-- Unity Input System for touch controls
-- World Space Canvas for floor result display
-- iOS-specific optimizations and safe area handling
-- Mobile performance optimization
+### Setup Requirements
+- Canvas with UIManager component
+- GameManager with configured Board Center and Board Size
+- Wall objects tagged with "Wall" tag
 
-### Phase 4: Polish (Weeks 7-8)
-- Physics edge case handling (stuck dice, stacking)
-- Audio integration (rolling, bouncing, settling sounds)
-- iOS build pipeline and device testing
-- Performance optimization for target 60fps on iPhone 8+
-
-## File Structure Conventions
+## File Structure
 
 ```
-Assets/
-├── Scripts/Managers/     # Core singleton managers
-├── Scripts/Physics/      # Physics-related components and configs
-├── Scripts/Input/        # Touch input handling
-├── Scripts/UI/          # UI components and managers
-├── Scripts/Utils/       # Utility classes and helpers
-├── Prefabs/Dice/        # Dice variants and configurations
-├── Prefabs/Environment/ # Room and boundary prefabs
-├── Materials/Physics/   # Physics Materials for dice/walls
-└── Scenes/             # Game scenes
+Assets/Scripts/
+├── Managers/           # GameManager, DiceController
+├── Physics/           # DicePhysicsConstants, DicePhysicsConfig, SettlingDetector
+├── Input/             # TouchInputHandler, input action assets
+├── UI/                # UIManager, ScoreManager, ResultDisplayUI
+├── Utils/             # PerformanceMonitor, test helpers
+└── Audio/             # Audio management (future)
+
+Assets/Materials/Physics/  # Physics materials for dice/walls/floor
+Assets/Prefabs/           # Dice and environment prefabs
+Assets/Scenes/            # DiceGame.unity main scene
 ```
-
-## Performance Requirements
-
-- **Target**: 60fps on iPhone 8+, 30fps fallback for older devices
-- **Memory**: < 100MB RAM usage
-- **Load Time**: < 3 seconds to playable state
-- **Touch Response**: < 16ms input latency
-
-## iOS-Specific Considerations
-
-- **Minimum iOS**: 13.0+
-- **Orientation**: Portrait and landscape support
-- **Safe Areas**: Proper handling for notched devices
-- **Background Behavior**: Configure to Exit (recommended for physics apps)
-- **Input Validation**: Prevent conflicts with iOS system gestures
-
-## Physics Tuning Values
-
-Based on testing, optimal physics material settings:
-- **Dice Bounciness**: 0.3f
-- **Wall Friction**: 0.4f
-- **Settling Velocity**: 0.1f units/second
-- **Settling Time**: 1.0f seconds minimum
 
 ## Common Development Patterns
 
-### Dice Rolling Implementation
-```csharp
-// Apply random torque and initial velocity
-rigidbody.AddTorque(Random.Range(-torqueRange, torqueRange), 
-                   Random.Range(-torqueRange, torqueRange), 
-                   Random.Range(-torqueRange, torqueRange));
-```
+### Adding New Dice Behavior
+1. Modify `DiceController` for physics changes
+2. Update `DicePhysicsConstants` for tuning values
+3. Use existing event system for state communication
 
-### Settling Detection
-Multi-criteria validation combining velocity, angular velocity, and time requirements to ensure accurate dice state detection.
+### UI Development
+1. Use UIManager as the central coordinator
+2. Screen-space UI should integrate with ScoreManager pattern
+3. World-space UI follows ResultDisplayUI pattern
 
-### Event System
-UnityEvents for dice state changes (OnRollStart, OnDiceSettled, OnResultCalculated) enabling decoupled system communication.
+### Physics Tuning
+1. Modify constants in `DicePhysicsConstants.cs`
+2. Test with Physics Debugger and Profiler
+3. Use debug flags in components for real-time feedback
 
-## Testing Strategy
+### Testing New Features
+1. Add test methods to ScoreSystemTestHelper pattern
+2. Use Context Menu attributes for inspector testing
+3. Implement keyboard shortcuts for rapid iteration
 
-- **Unit Tests**: Individual component functionality
-- **Physics Tests**: Dice settling accuracy and edge cases
-- **Performance Tests**: Frame rate and memory usage on target devices
-- **Device Tests**: Multiple iOS device compatibility validation
+## Performance Targets
+
+- **Target FPS**: 60fps on iPhone 8+, 30fps fallback
+- **Memory**: < 100MB RAM usage
+- **Touch Response**: < 16ms input latency
+- **Load Time**: < 3 seconds to playable state
+
+## Debugging Tips
+
+### Physics Issues
+- Enable `debugSettling` in DiceController inspector
+- Use `debugBounds` in GameManager to visualize play area
+- Check Physics Debugger for collision detection issues
+
+### Score System Issues
+- Verify wall objects have "Wall" tag
+- Check Board Center and Board Size configuration in GameManager
+- Use ScoreSystemTestHelper keyboard shortcuts to isolate problems
+
+### Common Gotchas
+- Dice settling requires all criteria: velocity, angular velocity, and time
+- Invalid rolls return -1 from GameManager.OnResultCalculated
+- Score display requires Canvas with UIManager component
+- Wall detection uses raycast from dice center, not collision events
+
+## Mobile-Specific Considerations
+
+- **iOS Target**: iOS 13.0+ with portrait/landscape support
+- **Touch Input**: Unity Input System with gesture recognition
+- **Performance**: Continuous collision detection for fast-moving dice
+- **UI Scaling**: CanvasScaler with reference resolution 1920x1080
+
+## Implementation Status
+
+Currently in Phase 1 (Core Physics) with working:
+- ✅ Basic dice physics and settling detection
+- ✅ Manager architecture and event system  
+- ✅ Score validation and display system
+- ✅ Touch input handling foundation
+- 🔄 Mobile optimization and polish (ongoing)

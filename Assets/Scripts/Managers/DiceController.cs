@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
+using TMPro;
 using DiceGame.Physics;
 
 namespace DiceGame.Managers
@@ -22,6 +24,9 @@ namespace DiceGame.Managers
         [Header("Settling Detection")]
         [SerializeField] private float settlingCheckInterval = 0.1f;
         [SerializeField] private bool debugSettling = false;
+        
+        [Header("Score Display Test")]
+        [SerializeField] private bool createScoreUI = true;
         
         [Header("Events")]
         public UnityEvent OnRollStarted = new UnityEvent();
@@ -50,6 +55,49 @@ namespace DiceGame.Managers
         private void Start()
         {
             InvokeRepeating(nameof(CheckSettling), 0f, settlingCheckInterval);
+            
+            if (createScoreUI)
+            {
+                CreateScoreDisplay();
+            }
+        }
+        
+        private void CreateScoreDisplay()
+        {
+            Debug.Log("DiceController creating score display...");
+            
+            // Create Canvas
+            GameObject canvasGO = new GameObject("SCORE_CANVAS_FROM_DICE");
+            Canvas canvas = canvasGO.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 999;
+            
+            CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            
+            canvasGO.AddComponent<GraphicRaycaster>();
+            
+            // Create Score Text
+            GameObject scoreGO = new GameObject("SCORE_TEXT_FROM_DICE");
+            scoreGO.transform.SetParent(canvas.transform, false);
+            
+            TextMeshProUGUI scoreText = scoreGO.AddComponent<TextMeshProUGUI>();
+            scoreText.text = "DICE SCORE: 888";
+            scoreText.fontSize = 50;
+            scoreText.color = Color.cyan;
+            scoreText.fontStyle = FontStyles.Bold;
+            scoreText.alignment = TextAlignmentOptions.TopRight;
+            
+            // Position at top right
+            RectTransform rt = scoreText.rectTransform;
+            rt.anchorMin = new Vector2(1f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-20f, -20f);
+            rt.sizeDelta = new Vector2(400f, 100f);
+            
+            Debug.Log("Score display created from DiceController!");
         }
         
         private void InitializeComponents()
