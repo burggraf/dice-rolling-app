@@ -26,11 +26,11 @@ public class SimpleDiceGame : MonoBehaviour
         floor.transform.position = Vector3.zero;
         floor.transform.localScale = new Vector3(10, 0.1f, 10);
         
-        // Create walls
-        CreateWall("WallNorth", new Vector3(0, 2.5f, 5), new Vector3(10, 5, 0.1f));
-        CreateWall("WallSouth", new Vector3(0, 2.5f, -5), new Vector3(10, 5, 0.1f));
-        CreateWall("WallEast", new Vector3(5, 2.5f, 0), new Vector3(0.1f, 5, 10));
-        CreateWall("WallWest", new Vector3(-5, 2.5f, 0), new Vector3(0.1f, 5, 10));
+        // Create walls - shorter walls, very short front wall
+        CreateWall("WallNorth", new Vector3(0, 1.7f, 5), new Vector3(10, 3.3f, 0.1f));
+        CreateWall("WallSouth", new Vector3(0, 0.5f, -5), new Vector3(10, 1f, 0.1f)); // Front wall - very short
+        CreateWall("WallEast", new Vector3(5, 1.7f, 0), new Vector3(0.1f, 3.3f, 10));
+        CreateWall("WallWest", new Vector3(-5, 1.7f, 0), new Vector3(0.1f, 3.3f, 10));
         
         // Create dice
         die1 = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -52,6 +52,32 @@ public class SimpleDiceGame : MonoBehaviour
         wall.name = name;
         wall.transform.position = position;
         wall.transform.localScale = scale;
+    }
+    
+    void CreateTransparentWall(string name, Vector3 position, Vector3 scale)
+    {
+        GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        wall.name = name;
+        wall.transform.position = position;
+        wall.transform.localScale = scale;
+        
+        // Make it transparent
+        Renderer renderer = wall.GetComponent<Renderer>();
+        Material transparentMat = new Material(Shader.Find("Standard"));
+        transparentMat.SetFloat("_Mode", 3); // Transparent mode
+        transparentMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        transparentMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        transparentMat.SetInt("_ZWrite", 0);
+        transparentMat.DisableKeyword("_ALPHATEST_ON");
+        transparentMat.EnableKeyword("_ALPHABLEND_ON");
+        transparentMat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        transparentMat.renderQueue = 3000;
+        
+        Color color = transparentMat.color;
+        color.a = 0.3f; // 30% opacity
+        transparentMat.color = color;
+        
+        renderer.material = transparentMat;
     }
     
     void Update()
@@ -77,11 +103,11 @@ public class SimpleDiceGame : MonoBehaviour
         rb2.velocity = Vector3.zero;
         rb2.angularVelocity = Vector3.zero;
         
-        // Apply random forces
-        rb1.AddForce(Random.Range(-10f, 10f), Random.Range(5f, 15f), Random.Range(-10f, 10f), ForceMode.Impulse);
-        rb1.AddTorque(Random.Range(-100f, 100f), Random.Range(-100f, 100f), Random.Range(-100f, 100f));
+        // Apply gentler random forces - keep dice in the room
+        rb1.AddForce(Random.Range(-3f, 3f), Random.Range(2f, 5f), Random.Range(-3f, 3f), ForceMode.Impulse);
+        rb1.AddTorque(Random.Range(-50f, 50f), Random.Range(-50f, 50f), Random.Range(-50f, 50f));
         
-        rb2.AddForce(Random.Range(-10f, 10f), Random.Range(5f, 15f), Random.Range(-10f, 10f), ForceMode.Impulse);
-        rb2.AddTorque(Random.Range(-100f, 100f), Random.Range(-100f, 100f), Random.Range(-100f, 100f));
+        rb2.AddForce(Random.Range(-3f, 3f), Random.Range(2f, 5f), Random.Range(-3f, 3f), ForceMode.Impulse);
+        rb2.AddTorque(Random.Range(-50f, 50f), Random.Range(-50f, 50f), Random.Range(-50f, 50f));
     }
 }
