@@ -35,6 +35,19 @@ public class SimpleDiceGame : MonoBehaviour
         floor.transform.position = new Vector3(0, -0.05f, 0); // Position floor so top surface is at Y=0
         floor.transform.localScale = new Vector3(10, 0.1f, 10);
         
+        // Add visible material to floor
+        Renderer floorRenderer = floor.GetComponent<Renderer>();
+        if (floorRenderer != null)
+        {
+            Shader shader = Shader.Find("Legacy Shaders/Diffuse");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            
+            Material floorMaterial = new Material(shader);
+            floorMaterial.color = Color.green; // Make floor green for visibility
+            floorRenderer.material = floorMaterial;
+        }
+        
         // Create walls - shorter walls, very short front wall
         CreateWall("WallNorth", new Vector3(0, 1.7f, 5), new Vector3(10, 3.3f, 0.1f));
         CreateWall("WallSouth", new Vector3(0, 0.5f, -5), new Vector3(10, 1f, 0.1f)); // Front wall - very short
@@ -43,10 +56,16 @@ public class SimpleDiceGame : MonoBehaviour
         
         // Create dice
         die1 = CreateDie("Die1", new Vector3(0, 3, 0), Color.blue);
-        rb1 = die1.AddComponent<Rigidbody>();
+        if (die1 != null)
+        {
+            rb1 = die1.AddComponent<Rigidbody>();
+        }
         
         die2 = CreateDie("Die2", new Vector3(1, 3, 0), Color.blue);
-        rb2 = die2.AddComponent<Rigidbody>();
+        if (die2 != null)
+        {
+            rb2 = die2.AddComponent<Rigidbody>();
+        }
         
         Debug.Log("Everything created! Click to roll dice!");
         
@@ -60,6 +79,23 @@ public class SimpleDiceGame : MonoBehaviour
         wall.name = name;
         wall.transform.position = position;
         wall.transform.localScale = scale;
+        wall.tag = "Wall"; // Tag for collision detection
+        
+        // Add visible material to walls
+        Renderer wallRenderer = wall.GetComponent<Renderer>();
+        if (wallRenderer != null)
+        {
+            // Use compatible shader
+            Shader shader = Shader.Find("Legacy Shaders/Diffuse");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            
+            Material wallMaterial = new Material(shader);
+            wallMaterial.color = Color.gray; // Make walls gray and visible
+            wallRenderer.material = wallMaterial;
+        }
+        
+        Debug.Log($"Created wall: {name} at position {position} with scale {scale}");
     }
     
     GameObject CreateDie(string name, Vector3 position, Color baseColor)
@@ -89,13 +125,22 @@ public class SimpleDiceGame : MonoBehaviour
     
     Material CreateDiceAtlasMaterial()
     {
-        Material material = new Material(Shader.Find("Standard"));
+        // Use built-in shader that works on all platforms including iOS simulator
+        Shader shader = Shader.Find("Legacy Shaders/Diffuse");
+        if (shader == null)
+        {
+            // Fallback to unlit shader if diffuse is not available
+            shader = Shader.Find("Unlit/Texture");
+        }
+        if (shader == null)
+        {
+            // Final fallback to default material shader
+            shader = Shader.Find("Sprites/Default");
+        }
+        
+        Material material = new Material(shader);
         Texture2D atlasTexture = CreateDiceAtlasTexture();
         material.mainTexture = atlasTexture;
-        
-        // Disable smoothness/metallic to make dice look more traditional
-        material.SetFloat("_Metallic", 0f);
-        material.SetFloat("_Glossiness", 0.1f);
         
         return material;
     }
@@ -313,7 +358,12 @@ public class SimpleDiceGame : MonoBehaviour
     
     Material CreateDiceFaceMaterial(int dotCount)
     {
-        Material faceMaterial = new Material(Shader.Find("Standard"));
+        // Use compatible shader for all platforms
+        Shader shader = Shader.Find("Legacy Shaders/Diffuse");
+        if (shader == null) shader = Shader.Find("Unlit/Texture");
+        if (shader == null) shader = Shader.Find("Sprites/Default");
+        
+        Material faceMaterial = new Material(shader);
         Texture2D faceTexture = CreateSingleFaceTexture(dotCount);
         faceMaterial.mainTexture = faceTexture;
         return faceMaterial;
@@ -552,7 +602,10 @@ public class SimpleDiceGame : MonoBehaviour
         
         // Make it transparent
         Renderer renderer = wall.GetComponent<Renderer>();
-        Material transparentMat = new Material(Shader.Find("Standard"));
+        Shader shader = Shader.Find("Legacy Shaders/Transparent/Diffuse");
+        if (shader == null) shader = Shader.Find("Unlit/Transparent");
+        if (shader == null) shader = Shader.Find("Sprites/Default");
+        Material transparentMat = new Material(shader);
         transparentMat.SetFloat("_Mode", 3); // Transparent mode
         transparentMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
         transparentMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
@@ -587,6 +640,13 @@ public class SimpleDiceGame : MonoBehaviour
     void RollDice()
     {
         Debug.Log("Rolling dice!");
+        
+        // Check if dice objects exist
+        if (die1 == null || die2 == null || rb1 == null || rb2 == null)
+        {
+            Debug.LogError("Dice objects are null! Cannot roll.");
+            return;
+        }
         
         // Set rolling state
         isRolling = true;
@@ -665,6 +725,13 @@ public class SimpleDiceGame : MonoBehaviour
     
     bool AreDiceSettled()
     {
+        // Check if rigidbodies exist
+        if (rb1 == null || rb2 == null)
+        {
+            Debug.LogError("Rigidbodies are null in AreDiceSettled!");
+            return false;
+        }
+        
         float velocityThreshold = 0.1f;
         float angularVelocityThreshold = 0.1f;
         
@@ -822,6 +889,14 @@ public class SimpleDiceGame : MonoBehaviour
     
     void CheckDiceValidityDuringRoll()
     {
+        // Check if dice objects exist
+        if (die1 == null || die2 == null || rb1 == null || rb2 == null)
+        {
+            Debug.LogError("Dice objects are null during validation check!");
+            ForceInvalidRoll("Dice objects are null");
+            return;
+        }
+        
         // Only check for dice that are way out of bounds (fell off table completely)
         // Don't check wall contact or flatness until dice are fully settled
         
@@ -875,11 +950,17 @@ public class SimpleDiceGame : MonoBehaviour
         isRolling = false;
         CancelInvoke(nameof(CheckDiceSettled));
         
-        // Stop dice movement
-        rb1.velocity = Vector3.zero;
-        rb1.angularVelocity = Vector3.zero;
-        rb2.velocity = Vector3.zero;
-        rb2.angularVelocity = Vector3.zero;
+        // Stop dice movement if rigidbodies exist
+        if (rb1 != null)
+        {
+            rb1.velocity = Vector3.zero;
+            rb1.angularVelocity = Vector3.zero;
+        }
+        if (rb2 != null)
+        {
+            rb2.velocity = Vector3.zero;
+            rb2.angularVelocity = Vector3.zero;
+        }
         
         // Show "Roll Again" message
         if (scoreText != null)
