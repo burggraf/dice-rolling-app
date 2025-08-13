@@ -31,6 +31,10 @@ namespace DiceGame.Managers
         [SerializeField] private Vector3 boardSize = new Vector3(10f, 2f, 10f);
         [SerializeField] private bool debugBounds = false;
         
+        [Header("Roll Validation")]
+        [SerializeField] private float rollTimeoutDuration = 10f;
+        [SerializeField] private float validationCheckInterval = 1f;
+        
         [Header("Events")]
         public UnityEvent OnGameStart = new UnityEvent();
         public UnityEvent OnRollStart = new UnityEvent();
@@ -39,6 +43,8 @@ namespace DiceGame.Managers
         
         private GameState currentState = GameState.Ready;
         private float autoRollTimer;
+        private float rollStartTime;
+        private float validationTimer;
         
         // Score display components
         private Canvas scoreCanvas;
@@ -75,6 +81,7 @@ namespace DiceGame.Managers
         {
             HandleAutoRoll();
             UpdateGameState();
+            HandleRollValidation();
         }
         
         private void SetupSingleton()
@@ -145,6 +152,9 @@ namespace DiceGame.Managers
             
             Debug.Log("Rolling dice...");
             currentState = GameState.Rolling;
+            rollStartTime = Time.time;
+            validationTimer = 0f;
+            Debug.Log($"Roll started at time: {rollStartTime}, timeout in: {rollTimeoutDuration}s");
             OnRollStart?.Invoke();
             
             foreach (var dice in diceControllers)
@@ -197,6 +207,110 @@ namespace DiceGame.Managers
                     Invoke(nameof(ReturnToReady), 3f);
                     break;
             }
+        }
+        
+        private void HandleRollValidation()
+        {
+            if (currentState != GameState.Rolling) return;
+            
+            // Check for timeout
+            float rollDuration = Time.time - rollStartTime;
+            if (rollDuration > rollTimeoutDuration)
+            {
+                Debug.Log("Roll timed out - forcing invalid result");
+                ForceInvalidRoll("Roll timed out");
+                return;
+            }
+            
+            // Periodic validation check during rolling
+            validationTimer += Time.deltaTime;
+            if (validationTimer >= validationCheckInterval)
+            {
+                validationTimer = 0f;
+                Debug.Log($"Checking dice validity during roll. Roll duration: {rollDuration:F1}s");
+                CheckDiceValidityDuringRoll();
+            }
+        }
+        
+        private void CheckDiceValidityDuringRoll()
+        {
+            foreach (var dice in diceControllers)
+            {
+                Vector3 dicePos = dice.transform.position;
+                Rigidbody diceRb = dice.GetComponent<Rigidbody>();
+                float velocity = diceRb != null ? diceRb.velocity.magnitude : 0f;
+                
+                Debug.Log($"Dice {dice.name} - Position: {dicePos}, Velocity: {velocity:F2}");
+                
+                // Check if dice is way out of bounds (fell off the table)
+                if (IsDiceWayOutOfBounds(dice))
+                {
+                    Debug.Log($"Dice {dice.name} fell out of play at position {dicePos} - forcing invalid result");
+                    ForceInvalidRoll($"Dice {dice.name} fell out of play");
+                    return;
+                }
+                
+                // Check if dice is leaning against wall (only if it's moving slowly)
+                if (diceRb != null && velocity < 2f && IsDiceTouchingWall(dice))
+                {
+                    Debug.Log($"Dice {dice.name} is leaning against wall - forcing invalid result");
+                    ForceInvalidRoll($"Dice {dice.name} is touching wall");
+                    return;
+                }
+            }
+        }
+        
+        private bool IsDiceWayOutOfBounds(DiceController dice)
+        {
+            Vector3 dicePos = dice.transform.position;
+            
+            if (boardCenter == null)
+            {
+                // Use larger fallback boundaries for "way out of bounds" check
+                Vector3 boardMin = new Vector3(-8f, -5f, -8f);
+                Vector3 boardMax = new Vector3(8f, 10f, 8f);
+                bool outOfBounds = dicePos.x < boardMin.x || dicePos.x > boardMax.x ||
+                                  dicePos.z < boardMin.z || dicePos.z > boardMax.z ||
+                                  dicePos.y < boardMin.y;
+                
+                Debug.Log($"Dice {dice.name} bounds check (no board center): Pos={dicePos}, Bounds={boardMin} to {boardMax}, OutOfBounds={outOfBounds}");
+                return outOfBounds;
+            }
+            
+            // Use expanded boundaries for "way out of bounds" check
+            Vector3 expandedSize = boardSize * 1.5f;
+            Vector3 boardMin = boardCenter.position - expandedSize * 0.5f;
+            Vector3 boardMax = boardCenter.position + expandedSize * 0.5f;
+            
+            bool wayOutOfBounds = dicePos.x < boardMin.x || dicePos.x > boardMax.x ||
+                                 dicePos.z < boardMin.z || dicePos.z > boardMax.z ||
+                                 dicePos.y < boardMin.y - 2f; // Allow more margin below
+            
+            Debug.Log($"Dice {dice.name} bounds check: Pos={dicePos}, BoardCenter={boardCenter.position}, BoardSize={boardSize}, ExpandedBounds={boardMin} to {boardMax}, OutOfBounds={wayOutOfBounds}");
+            
+            return wayOutOfBounds;
+        }
+        
+        private void ForceInvalidRoll(string reason)
+        {
+            Debug.Log($"Forcing invalid roll: {reason}");
+            currentState = GameState.DisplayingResult;
+            OnResultCalculated?.Invoke(-1);
+            UpdateScoreDisplay(-1);
+            
+            // Stop all dice movement
+            foreach (var dice in diceControllers)
+            {
+                Rigidbody diceRb = dice.GetComponent<Rigidbody>();
+                if (diceRb != null)
+                {
+                    diceRb.velocity = Vector3.zero;
+                    diceRb.angularVelocity = Vector3.zero;
+                }
+            }
+            
+            // Return to ready after display time
+            Invoke(nameof(ReturnToReady), 3f);
         }
         
         private void CheckAllDiceSettled()
@@ -364,6 +478,24 @@ namespace DiceGame.Managers
             UpdateScoreDisplay(-1);
         }
         
+        [ContextMenu("Test Roll Timeout")]
+        public void TestRollTimeout()
+        {
+            Debug.Log("Testing roll timeout");
+            ForceInvalidRoll("Manual timeout test");
+        }
+        
+        [ContextMenu("Test Out of Bounds Detection")]
+        public void TestOutOfBoundsDetection()
+        {
+            if (diceControllers != null && diceControllers.Length > 0)
+            {
+                // Move first dice way out of bounds
+                diceControllers[0].transform.position = new Vector3(100f, -10f, 100f);
+                Debug.Log("Moved dice out of bounds for testing");
+            }
+        }
+        
         private void ReturnToReady()
         {
             currentState = GameState.Ready;
@@ -389,6 +521,8 @@ namespace DiceGame.Managers
         {
             numberOfDice = Mathf.Clamp(numberOfDice, 1, 6);
             autoRollInterval = Mathf.Max(autoRollInterval, 1f);
+            rollTimeoutDuration = Mathf.Clamp(rollTimeoutDuration, 5f, 30f);
+            validationCheckInterval = Mathf.Clamp(validationCheckInterval, 0.5f, 2f);
             
             if (boardSize.x <= 0) boardSize.x = 10f;
             if (boardSize.y <= 0) boardSize.y = 2f;

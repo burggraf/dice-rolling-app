@@ -1,9 +1,18 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class SimpleDiceGame : MonoBehaviour
 {
     private GameObject die1, die2;
     private Rigidbody rb1, rb2;
+    private Text scoreText;
+    
+    // Roll validation
+    private bool isRolling = false;
+    private float rollStartTime;
+    private float rollTimeoutDuration = 8f;
+    private float validationCheckInterval = 1f;
+    private float validationTimer;
     
     void Start()
     {
@@ -40,6 +49,9 @@ public class SimpleDiceGame : MonoBehaviour
         rb2 = die2.AddComponent<Rigidbody>();
         
         Debug.Log("Everything created! Click to roll dice!");
+        
+        // Create Score UI
+        CreateScoreUI();
     }
     
     void CreateWall(string name, Vector3 position, Vector3 scale)
@@ -564,11 +576,29 @@ public class SimpleDiceGame : MonoBehaviour
         {
             RollDice();
         }
+        
+        // Handle roll validation during rolling
+        if (isRolling)
+        {
+            HandleRollValidation();
+        }
     }
     
     void RollDice()
     {
         Debug.Log("Rolling dice!");
+        
+        // Set rolling state
+        isRolling = true;
+        rollStartTime = Time.time;
+        validationTimer = 0f;
+        
+        // Update score text to show rolling
+        if (scoreText != null)
+        {
+            scoreText.text = "Rolling...";
+            scoreText.color = Color.yellow;
+        }
         
         // Reset positions
         die1.transform.position = new Vector3(0, 3, 0);
@@ -586,5 +616,249 @@ public class SimpleDiceGame : MonoBehaviour
         
         rb2.AddForce(Random.Range(-3f, 3f), Random.Range(4f, 8f), Random.Range(-3f, 3f), ForceMode.Impulse);
         rb2.AddTorque(Random.Range(-50f, 50f), Random.Range(-50f, 50f), Random.Range(-50f, 50f));
+        
+        // Start checking for dice to settle
+        InvokeRepeating(nameof(CheckDiceSettled), 1f, 0.5f);
+    }
+    
+    void CreateScoreUI()
+    {
+        Debug.Log("Creating score UI...");
+        
+        // Create Canvas
+        GameObject canvasGO = new GameObject("Score Canvas");
+        Canvas canvas = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 100;
+        
+        // Create Score Text
+        GameObject scoreGO = new GameObject("Score Text");
+        scoreGO.transform.SetParent(canvas.transform, false);
+        
+        scoreText = scoreGO.AddComponent<Text>();
+        scoreText.text = "Score: Click to Roll";
+        scoreText.fontSize = 32;
+        scoreText.color = Color.white;
+        scoreText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        
+        // Position at top right
+        RectTransform rt = scoreText.rectTransform;
+        rt.anchorMin = new Vector2(1f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(1f, 1f);
+        rt.anchoredPosition = new Vector2(-20f, -20f);
+        rt.sizeDelta = new Vector2(300f, 50f);
+        
+        Debug.Log("Score UI created!");
+    }
+    
+    void CheckDiceSettled()
+    {
+        // Check if both dice have stopped moving
+        if (AreDiceSettled())
+        {
+            CancelInvoke(nameof(CheckDiceSettled)); // Stop checking
+            isRolling = false; // Stop rolling validation
+            UpdateScore();
+        }
+    }
+    
+    bool AreDiceSettled()
+    {
+        float velocityThreshold = 0.1f;
+        float angularVelocityThreshold = 0.1f;
+        
+        bool die1Settled = rb1.velocity.magnitude < velocityThreshold && 
+                          rb1.angularVelocity.magnitude < angularVelocityThreshold;
+                          
+        bool die2Settled = rb2.velocity.magnitude < velocityThreshold && 
+                          rb2.angularVelocity.magnitude < angularVelocityThreshold;
+        
+        return die1Settled && die2Settled;
+    }
+    
+    void UpdateScore()
+    {
+        if (scoreText == null) return;
+        
+        // Calculate dice values based on which face is pointing UP
+        int die1Value = GetDiceValueFromTopFace(die1.transform);
+        int die2Value = GetDiceValueFromTopFace(die2.transform);
+        int total = die1Value + die2Value;
+        
+        // Check if dice are against walls or out of bounds
+        if (IsDiceAgainstWall(die1) || IsDiceAgainstWall(die2) || 
+            IsDiceOutOfBounds(die1) || IsDiceOutOfBounds(die2))
+        {
+            scoreText.text = "Roll Again";
+            scoreText.color = Color.red;
+        }
+        else
+        {
+            scoreText.text = "Score: " + total;
+            scoreText.color = Color.white;
+        }
+        
+        Debug.Log($"Die 1: {die1Value}, Die 2: {die2Value}, Total: {total}");
+    }
+    
+    int GetDiceValueFromTopFace(Transform diceTransform)
+    {
+        // Find which face is pointing most upward (toward world Y+)
+        Vector3 worldUp = Vector3.up;
+        
+        // The six face directions in local space of the dice
+        Vector3[] localFaceDirections = {
+            Vector3.up,      // Local Y+ (originally top face)
+            Vector3.down,    // Local Y- (originally bottom face)
+            Vector3.forward, // Local Z+ (originally front face)
+            Vector3.back,    // Local Z- (originally back face)
+            Vector3.right,   // Local X+ (originally right face)
+            Vector3.left     // Local X- (originally left face)
+        };
+        
+        // Based on your dice atlas mapping from CreateCubeWithUVAtlas:
+        // Front: 1, Back: 6, Left: 3, Right: 4, Top: 2, Bottom: 5
+        int[] faceValues = { 2, 5, 1, 6, 4, 3 };
+        
+        float maxDot = -1f;
+        int bestFaceIndex = 0;
+        
+        // Transform each local face direction to world space and check alignment with world up
+        for (int i = 0; i < localFaceDirections.Length; i++)
+        {
+            Vector3 worldFaceDirection = diceTransform.TransformDirection(localFaceDirections[i]);
+            float dot = Vector3.Dot(worldFaceDirection, worldUp);
+            
+            if (dot > maxDot)
+            {
+                maxDot = dot;
+                bestFaceIndex = i;
+            }
+        }
+        
+        int result = faceValues[bestFaceIndex];
+        Debug.Log($"Dice face pointing up: {bestFaceIndex}, Value: {result}, Dot: {maxDot:F2}");
+        return result;
+    }
+    
+    bool IsDiceAgainstWall(GameObject dice)
+    {
+        Vector3 pos = dice.transform.position;
+        float threshold = 0.6f; // Distance from wall center
+        
+        // Check if dice is too close to any wall
+        return (Mathf.Abs(pos.x) > 5f - threshold || Mathf.Abs(pos.z) > 5f - threshold);
+    }
+    
+    bool IsDiceOutOfBounds(GameObject dice)
+    {
+        Vector3 pos = dice.transform.position;
+        
+        // Check if dice fell below floor or outside play area
+        return (pos.y < -2f || Mathf.Abs(pos.x) > 6f || Mathf.Abs(pos.z) > 6f);
+    }
+    
+    void HandleRollValidation()
+    {
+        // Check for timeout
+        float rollDuration = Time.time - rollStartTime;
+        if (rollDuration > rollTimeoutDuration)
+        {
+            Debug.Log("Roll timed out - forcing invalid result");
+            ForceInvalidRoll("Roll timed out");
+            return;
+        }
+        
+        // Periodic validation check during rolling
+        validationTimer += Time.deltaTime;
+        if (validationTimer >= validationCheckInterval)
+        {
+            validationTimer = 0f;
+            Debug.Log($"Checking dice validity during roll. Roll duration: {rollDuration:F1}s");
+            CheckDiceValidityDuringRoll();
+        }
+    }
+    
+    void CheckDiceValidityDuringRoll()
+    {
+        // Check die1
+        Vector3 die1Pos = die1.transform.position;
+        float die1Velocity = rb1.velocity.magnitude;
+        
+        Debug.Log($"Die1 - Position: {die1Pos}, Velocity: {die1Velocity:F2}");
+        
+        if (IsDiceWayOutOfBounds(die1))
+        {
+            Debug.Log($"Die1 fell out of play at position {die1Pos} - forcing invalid result");
+            ForceInvalidRoll("Die1 fell out of play");
+            return;
+        }
+        
+        // Check for wall contact when moving slowly
+        if (die1Velocity < 2f && IsDiceAgainstWall(die1))
+        {
+            Debug.Log("Die1 is leaning against wall - forcing invalid result");
+            ForceInvalidRoll("Die1 is touching wall");
+            return;
+        }
+        
+        // Check die2
+        Vector3 die2Pos = die2.transform.position;
+        float die2Velocity = rb2.velocity.magnitude;
+        
+        Debug.Log($"Die2 - Position: {die2Pos}, Velocity: {die2Velocity:F2}");
+        
+        if (IsDiceWayOutOfBounds(die2))
+        {
+            Debug.Log($"Die2 fell out of play at position {die2Pos} - forcing invalid result");
+            ForceInvalidRoll("Die2 fell out of play");
+            return;
+        }
+        
+        // Check for wall contact when moving slowly
+        if (die2Velocity < 2f && IsDiceAgainstWall(die2))
+        {
+            Debug.Log("Die2 is leaning against wall - forcing invalid result");
+            ForceInvalidRoll("Die2 is touching wall");
+            return;
+        }
+    }
+    
+    bool IsDiceWayOutOfBounds(GameObject dice)
+    {
+        Vector3 pos = dice.transform.position;
+        
+        // Use more permissive bounds for "way out of bounds" check
+        // Current bounds in IsDiceOutOfBounds: y < -2, |x| > 6, |z| > 6
+        // For "way out" we'll use: y < -3, |x| > 8, |z| > 8
+        bool wayOut = (pos.y < -3f || Mathf.Abs(pos.x) > 8f || Mathf.Abs(pos.z) > 8f);
+        
+        Debug.Log($"Dice {dice.name} way out of bounds check: Pos={pos}, WayOut={wayOut}");
+        return wayOut;
+    }
+    
+    void ForceInvalidRoll(string reason)
+    {
+        Debug.Log($"Forcing invalid roll: {reason}");
+        
+        // Stop rolling state
+        isRolling = false;
+        CancelInvoke(nameof(CheckDiceSettled));
+        
+        // Stop dice movement
+        rb1.velocity = Vector3.zero;
+        rb1.angularVelocity = Vector3.zero;
+        rb2.velocity = Vector3.zero;
+        rb2.angularVelocity = Vector3.zero;
+        
+        // Show "Roll Again" message
+        if (scoreText != null)
+        {
+            scoreText.text = "Roll Again";
+            scoreText.color = Color.red;
+        }
+        
+        Debug.Log("Invalid roll detected - showing 'Roll Again'");
     }
 }
