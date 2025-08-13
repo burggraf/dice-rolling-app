@@ -681,25 +681,49 @@ public class SimpleDiceGame : MonoBehaviour
     {
         if (scoreText == null) return;
         
-        // Calculate dice values based on which face is pointing UP
-        int die1Value = GetDiceValueFromTopFace(die1.transform);
-        int die2Value = GetDiceValueFromTopFace(die2.transform);
-        int total = die1Value + die2Value;
+        // Check if roll is valid before calculating scores
+        bool die1Valid = IsValidDicePosition(die1);
+        bool die2Valid = IsValidDicePosition(die2);
+        bool rollValid = die1Valid && die2Valid;
         
-        // Check if dice are against walls or out of bounds
-        if (IsDiceAgainstWall(die1) || IsDiceAgainstWall(die2) || 
-            IsDiceOutOfBounds(die1) || IsDiceOutOfBounds(die2))
+        if (rollValid)
         {
-            scoreText.text = "Roll Again";
-            scoreText.color = Color.red;
+            // Calculate dice values based on which face is pointing UP
+            int die1Value = GetDiceValueFromTopFace(die1.transform);
+            int die2Value = GetDiceValueFromTopFace(die2.transform);
+            int total = die1Value + die2Value;
+            
+            scoreText.text = "Score: " + total;
+            scoreText.color = Color.white;
+            Debug.Log($"Valid roll - Die 1: {die1Value}, Die 2: {die2Value}, Total: {total}");
         }
         else
         {
-            scoreText.text = "Score: " + total;
-            scoreText.color = Color.white;
+            scoreText.text = "Roll Again";
+            scoreText.color = Color.red;
+            Debug.Log($"Invalid roll - Die1 valid: {die1Valid}, Die2 valid: {die2Valid}");
         }
+    }
+    
+    bool IsValidDicePosition(GameObject dice)
+    {
+        // Check all validation conditions for settled dice
+        bool notAgainstWall = !IsDiceAgainstWall(dice);
+        bool notOutOfBounds = !IsDiceOutOfBounds(dice);
+        bool lyingFlat = IsDiceLyingFlat(dice);
         
-        Debug.Log($"Die 1: {die1Value}, Die 2: {die2Value}, Total: {total}");
+        // Full validation with enhanced flatness detection
+        bool isValid = notAgainstWall && notOutOfBounds && lyingFlat;
+        
+        // Detailed logging to see what's failing
+        Debug.Log($"Dice {dice.name} position: {dice.transform.position}");
+        Debug.Log($"Dice {dice.name} validation details:");
+        Debug.Log($"  - NotAgainstWall: {notAgainstWall}");
+        Debug.Log($"  - NotOutOfBounds: {notOutOfBounds}");  
+        Debug.Log($"  - LyingFlat: {lyingFlat}");
+        Debug.Log($"  - IsValid (all checks): {isValid}");
+        
+        return isValid;
     }
     
     int GetDiceValueFromTopFace(Transform diceTransform)
@@ -745,18 +769,34 @@ public class SimpleDiceGame : MonoBehaviour
     bool IsDiceAgainstWall(GameObject dice)
     {
         Vector3 pos = dice.transform.position;
-        float threshold = 0.6f; // Distance from wall center
+        float threshold = 0.5f; // Less sensitive - only when dice center is very close to wall
         
-        // Check if dice is too close to any wall
-        return (Mathf.Abs(pos.x) > 5f - threshold || Mathf.Abs(pos.z) > 5f - threshold);
+        // Walls are at x=±5 and z=±5, so check distance from wall surfaces
+        bool againstXWall = Mathf.Abs(pos.x) > 5f - threshold;
+        bool againstZWall = Mathf.Abs(pos.z) > 5f - threshold;
+        bool againstWall = againstXWall || againstZWall;
+        
+        // Always log for debugging
+        Debug.Log($"Dice {dice.name} wall check: Pos={pos}, DistFromXWall={5f - Mathf.Abs(pos.x):F2}, DistFromZWall={5f - Mathf.Abs(pos.z):F2}, Threshold={threshold}, AgainstWall={againstWall}");
+        
+        return againstWall;
     }
     
     bool IsDiceOutOfBounds(GameObject dice)
     {
         Vector3 pos = dice.transform.position;
         
-        // Check if dice fell below floor or outside play area
-        return (pos.y < -2f || Mathf.Abs(pos.x) > 6f || Mathf.Abs(pos.z) > 6f);
+        // Check each condition separately for detailed logging
+        bool belowFloor = pos.y < -2f;
+        bool outsideX = Mathf.Abs(pos.x) > 6f;
+        bool outsideZ = Mathf.Abs(pos.z) > 6f;
+        
+        bool outOfBounds = belowFloor || outsideX || outsideZ;
+        
+        // Log details when checking bounds
+        Debug.Log($"Dice {dice.name} bounds check: Pos={pos}, BelowFloor={belowFloor}, OutsideX={outsideX}, OutsideZ={outsideZ}, OutOfBounds={outOfBounds}");
+        
+        return outOfBounds;
     }
     
     void HandleRollValidation()
@@ -782,6 +822,9 @@ public class SimpleDiceGame : MonoBehaviour
     
     void CheckDiceValidityDuringRoll()
     {
+        // Only check for dice that are way out of bounds (fell off table completely)
+        // Don't check wall contact or flatness until dice are fully settled
+        
         // Check die1
         Vector3 die1Pos = die1.transform.position;
         float die1Velocity = rb1.velocity.magnitude;
@@ -792,14 +835,6 @@ public class SimpleDiceGame : MonoBehaviour
         {
             Debug.Log($"Die1 fell out of play at position {die1Pos} - forcing invalid result");
             ForceInvalidRoll("Die1 fell out of play");
-            return;
-        }
-        
-        // Check for wall contact when moving slowly
-        if (die1Velocity < 2f && IsDiceAgainstWall(die1))
-        {
-            Debug.Log("Die1 is leaning against wall - forcing invalid result");
-            ForceInvalidRoll("Die1 is touching wall");
             return;
         }
         
@@ -816,13 +851,7 @@ public class SimpleDiceGame : MonoBehaviour
             return;
         }
         
-        // Check for wall contact when moving slowly
-        if (die2Velocity < 2f && IsDiceAgainstWall(die2))
-        {
-            Debug.Log("Die2 is leaning against wall - forcing invalid result");
-            ForceInvalidRoll("Die2 is touching wall");
-            return;
-        }
+        // Wall contact and flatness will be checked only after dice settle in UpdateScore()
     }
     
     bool IsDiceWayOutOfBounds(GameObject dice)
@@ -860,5 +889,128 @@ public class SimpleDiceGame : MonoBehaviour
         }
         
         Debug.Log("Invalid roll detected - showing 'Roll Again'");
+    }
+    
+    bool IsDiceLyingFlat(GameObject dice)
+    {
+        // Simple but effective flatness detection
+        Vector3 pos = dice.transform.position;
+        
+        // 1. Height check - dice should be around 0.5 units high when flat
+        float expectedHeight = 0.5f;
+        float heightTolerance = 0.15f; // More permissive
+        bool correctHeight = Mathf.Abs(pos.y - expectedHeight) <= heightTolerance;
+        
+        if (!correctHeight)
+        {
+            return false;
+        }
+        
+        // 2. Simple stability check - raycast down from dice center
+        RaycastHit hit;
+        bool hitFloor = Physics.Raycast(pos + Vector3.up * 0.1f, Vector3.down, out hit, 0.8f);
+        
+        if (!hitFloor || hit.collider.name != "Floor")
+        {
+            return false; // Not sitting on floor
+        }
+        
+        // 3. Check if dice is too close to any wall (enhanced wall detection)
+        float wallDistance = 0.7f; // Dice center must be this far from walls
+        bool tooCloseToWall = (Mathf.Abs(pos.x) > 5f - wallDistance || 
+                              Mathf.Abs(pos.z) > 5f - wallDistance);
+        
+        if (tooCloseToWall)
+        {
+            return false; // Too close to wall, likely leaning
+        }
+        
+        return true; // All checks passed
+    }
+    
+    Vector3 GetBottomFaceNormal(GameObject dice)
+    {
+        // Find which face is pointing most downward (toward world Y-)
+        Vector3 worldDown = Vector3.down;
+        
+        // The six face normals in local space of the dice
+        Vector3[] localFaceNormals = {
+            Vector3.up,      // Local Y+ (top face)
+            Vector3.down,    // Local Y- (bottom face)
+            Vector3.forward, // Local Z+ (front face)
+            Vector3.back,    // Local Z- (back face)
+            Vector3.right,   // Local X+ (right face)
+            Vector3.left     // Local X- (left face)
+        };
+        
+        float maxDot = -1f;
+        Vector3 bestFaceNormal = Vector3.down;
+        
+        // Transform each local face normal to world space and check alignment with world down
+        for (int i = 0; i < localFaceNormals.Length; i++)
+        {
+            Vector3 worldFaceNormal = dice.transform.TransformDirection(localFaceNormals[i]);
+            float dot = Vector3.Dot(worldFaceNormal, worldDown);
+            
+            if (dot > maxDot)
+            {
+                maxDot = dot;
+                bestFaceNormal = worldFaceNormal;
+            }
+        }
+        
+        Debug.Log($"Bottom face normal found: {bestFaceNormal} (alignment with down: {maxDot:F3})");
+        return bestFaceNormal;
+    }
+    
+    Vector3[] GetBottomFaceCorners(GameObject dice, Vector3 bottomFaceNormal)
+    {
+        // For a 1x1x1 cube, get the 4 corners of the bottom face
+        Vector3 diceCenter = dice.transform.position;
+        float halfSize = 0.5f; // Half the size of the cube
+        
+        // Determine which face is the bottom based on the normal
+        Vector3[] corners = new Vector3[4];
+        
+        // Get the dice's transform vectors
+        Vector3 right = dice.transform.right;
+        Vector3 up = dice.transform.up;
+        Vector3 forward = dice.transform.forward;
+        
+        // Determine which local axis the bottom normal aligns with most closely
+        float dotRight = Mathf.Abs(Vector3.Dot(bottomFaceNormal, right));
+        float dotUp = Mathf.Abs(Vector3.Dot(bottomFaceNormal, up));
+        float dotForward = Mathf.Abs(Vector3.Dot(bottomFaceNormal, forward));
+        
+        if (dotUp > dotRight && dotUp > dotForward)
+        {
+            // Bottom face is aligned with up/down axis
+            Vector3 faceCenter = diceCenter + (Vector3.Dot(bottomFaceNormal, up) > 0 ? -up : up) * halfSize;
+            corners[0] = faceCenter + right * halfSize + forward * halfSize;
+            corners[1] = faceCenter - right * halfSize + forward * halfSize;
+            corners[2] = faceCenter - right * halfSize - forward * halfSize;
+            corners[3] = faceCenter + right * halfSize - forward * halfSize;
+        }
+        else if (dotRight > dotForward)
+        {
+            // Bottom face is aligned with right/left axis
+            Vector3 faceCenter = diceCenter + (Vector3.Dot(bottomFaceNormal, right) > 0 ? -right : right) * halfSize;
+            corners[0] = faceCenter + up * halfSize + forward * halfSize;
+            corners[1] = faceCenter - up * halfSize + forward * halfSize;
+            corners[2] = faceCenter - up * halfSize - forward * halfSize;
+            corners[3] = faceCenter + up * halfSize - forward * halfSize;
+        }
+        else
+        {
+            // Bottom face is aligned with forward/back axis
+            Vector3 faceCenter = diceCenter + (Vector3.Dot(bottomFaceNormal, forward) > 0 ? -forward : forward) * halfSize;
+            corners[0] = faceCenter + right * halfSize + up * halfSize;
+            corners[1] = faceCenter - right * halfSize + up * halfSize;
+            corners[2] = faceCenter - right * halfSize - up * halfSize;
+            corners[3] = faceCenter + right * halfSize - up * halfSize;
+        }
+        
+        Debug.Log($"Bottom face corners calculated: {corners[0]}, {corners[1]}, {corners[2]}, {corners[3]}");
+        return corners;
     }
 }
